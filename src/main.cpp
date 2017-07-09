@@ -207,6 +207,7 @@ bool car_is_turning_left;
 bool car_is_turning_right;
 bool car_is_stopping;
 bool car_is_reverse;
+bool car_is_stopped;
 float speed;
 //Posições atuais do carro
 glm::vec3 car_position = glm::vec3 (0,0,-10);
@@ -1160,6 +1161,7 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
         time_accelerate = glfwGetTime();
         car_is_accelerating = true;
         car_is_stopping = false;
+
     }
 
     //Se o usuário soltar W, o carro parará de ser marcado como acelerando
@@ -1172,7 +1174,7 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
     }
 
     //Se o carro apertar A, o carro vai ser marcado como "Virando a esquerda"
-    if (key == GLFW_KEY_A && action == GLFW_PRESS){
+    if (key == GLFW_KEY_A && action == GLFW_PRESS && !car_is_stopped){
         time_turn_left = glfwGetTime();
         car_is_turning_left = true;
     }
@@ -1183,7 +1185,7 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
     }
 
     //Se o carro apertar D, o carro vai ser marcado como "Virando a direita"
-    if (key == GLFW_KEY_D && action == GLFW_PRESS){
+    if (key == GLFW_KEY_D && action == GLFW_PRESS && !car_is_stopped){
         time_turn_right = glfwGetTime();
         car_is_turning_right = true;
     }
@@ -1492,7 +1494,10 @@ void move_car(){
         float time_now = glfwGetTime();
         float time_passed = time_now - time_accelerate;
         time_accelerate = time_now;
-        speed += time_passed/6;
+        if (speed >= 0)
+            speed += time_passed/7;
+        if (speed < 0)
+            speed += time_passed/3;
         if (speed > 1)
             speed = 1;
 
@@ -1504,27 +1509,40 @@ void move_car(){
         float time_now = glfwGetTime();
         float time_passed = time_now - time_reverse;
         time_reverse = time_now;
-        speed -= time_passed/7;
+        if (speed <= 0)
+            speed -= time_passed/7;
+        if (speed > 0)
+            speed -= time_passed/3;
         if (speed < -1)
             speed = -1;
     }
 
 
-    if (car_is_turning_left && (car_is_accelerating || car_is_reverse || car_is_stopping)){
+    if (!(car_is_accelerating || car_is_reverse || car_is_stopping))
+        car_is_stopped = true;
+
+    if ((car_is_accelerating || car_is_reverse || car_is_stopping) && car_is_stopped){
+        car_is_stopped = false;
+        time_turn_left = glfwGetTime();
+        time_turn_right = glfwGetTime();
+    }
+
+    if (car_is_turning_left && !car_is_stopped){
         float time_now = glfwGetTime();
         float time_passed = time_now - time_turn_left;
         time_turn_left = time_now;
-        car_angle = car_angle - time_passed;
+        car_angle = car_angle - (time_passed * speed);
 
     }
 
-    if (car_is_turning_right && (car_is_accelerating || car_is_reverse || car_is_stopping)){
+    if (car_is_turning_right && !car_is_stopped){
         float time_now = glfwGetTime();
         float time_passed = time_now - time_turn_right;
         time_turn_right = time_now;
-        car_angle = car_angle + time_passed;
+        car_angle = car_angle + (time_passed * speed);
 
     }
+
 
     if (car_is_stopping){
         float time_now = glfwGetTime();
@@ -1532,7 +1550,7 @@ void move_car(){
         time_break = time_now;
 
         if (speed > 0){
-            speed -= time_passed/10;
+            speed -= time_passed/8;
             if (speed < 0){
                 speed = 0;
                 car_is_stopping = false;
@@ -1540,7 +1558,7 @@ void move_car(){
         }
 
         if (speed < 0){
-            speed += time_passed /10;
+            speed += time_passed /8;
             if (speed > 0){
                 speed = 0;
                 car_is_stopping = false;
