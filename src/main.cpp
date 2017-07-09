@@ -196,6 +196,11 @@ GLuint g_NumLoadedTextures = 0;
 
 
 
+glm::vec4 camera_position_c; // Ponto "c", centro da câmera
+float camera_x_buffer = 0.0f;
+float camera_z_buffer = 0.0f;
+
+
 //Tempo do começo do programa
 double time_accelerate;
 double time_turn_right;
@@ -302,7 +307,6 @@ int main(int argc, char* argv[])
     BuildTrianglesAndAddToVirtualScene(&planemodel);
 
     ObjModel carmodel("../../data/navigator.obj");
-    printf ("oi");
     ComputeNormals(&carmodel);
     BuildTrianglesAndAddToVirtualScene(&carmodel);
 
@@ -361,8 +365,8 @@ int main(int argc, char* argv[])
 
         // Abaixo definimos as varáveis que efetivamente definem a câmera virtual.
         // Veja slide 159 do documento "Aula_08_Sistemas_de_Coordenadas.pdf".
-        glm::vec4 camera_position_c  = glm::vec4(x,y,z,1.0f); // Ponto "c", centro da câmera
-        glm::vec4 camera_lookat_l    = glm::vec4(0.0f,0.0f,0.0f,1.0f); // Ponto "l", para onde a câmera (look-at) estará sempre olhando
+        camera_position_c  = glm::vec4(x + camera_x_buffer, y, z + camera_z_buffer, 1.0f); // Ponto "c", centro da câmera
+        glm::vec4 camera_lookat_l    = glm::vec4(car_position.x,car_position.y,car_position.z,1.0f); // Ponto "l", para onde a câmera (look-at) estará sempre olhando
         glm::vec4 camera_view_vector = camera_lookat_l - camera_position_c; // Vetor "view", sentido para onde a câmera está virada
         glm::vec4 camera_up_vector   = glm::vec4(0.0f,1.0f,0.0f,0.0f); // Vetor "up"
 
@@ -1162,7 +1166,6 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
         time_accelerate = glfwGetTime();
         car_is_accelerating = true;
         car_is_stopping = false;
-
     }
 
     //Se o usuário soltar W, o carro parará de ser marcado como acelerando
@@ -1501,7 +1504,6 @@ void move_car(){
             speed += time_passed/3;
         if (speed > 1)
             speed = 1;
-
     }
 
 
@@ -1569,7 +1571,11 @@ void move_car(){
 
 
     car_position.x = car_position.x + speed * cos(car_angle);
+    camera_x_buffer = camera_x_buffer + speed * cos(car_angle);
+
     car_position.z = car_position.z + speed * sin(car_angle);
+    camera_z_buffer = camera_z_buffer + speed * sin(car_angle);
+
 }
 
 
