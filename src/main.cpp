@@ -27,7 +27,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <algorithm>
-
+#include <iostream>
 // Headers das bibliotecas OpenGL
 #include <glad/glad.h>   // Criação de contexto OpenGL 3.3
 #include <GLFW/glfw3.h>  // Criação de janelas do sistema operacional
@@ -45,7 +45,7 @@
 // Headers locais, definidos na pasta "include/"
 #include "utils.h"
 #include "matrices.h"
-
+#define PI 3.14159265
 // Estrutura que representa um modelo geométrico carregado a partir de um
 // arquivo ".obj". Veja https://en.wikipedia.org/wiki/Wavefront_.obj_file .
 struct ObjModel
@@ -68,7 +68,7 @@ struct ObjModel
 
         if (!ret)
             throw std::runtime_error("Erro ao carregar modelo.");
-        
+
         printf("OK.\n");
     }
 };
@@ -118,6 +118,8 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 
+//Funções de movimento do carro
+void move_car();
 // Definimos uma estrutura que armazenará dados necessários para renderizar
 // cada objeto da cena virtual.
 struct SceneObject
@@ -162,7 +164,7 @@ bool g_MiddleMouseButtonPressed = false; // Análogo para botão do meio do mous
 // renderização.
 float g_CameraTheta = 0.0f; // Ângulo no plano ZX em relação ao eixo Z
 float g_CameraPhi = 0.0f;   // Ângulo em relação ao eixo Y
-float g_CameraDistance = 3.5f; // Distância da câmera para a origem
+float g_CameraDistance = 25.0f; // Distância da câmera para a origem
 
 // Variáveis que controlam rotação do antebraço
 float g_ForearmAngleZ = 0.0f;
@@ -191,6 +193,29 @@ GLint bbox_max_uniform;
 
 // Número de texturas carregadas pela função LoadTextureImage()
 GLuint g_NumLoadedTextures = 0;
+
+glm::vec4 camera_position_c; // Ponto "c", centro da câmera
+float camera_x_buffer = 0.0f;
+float camera_z_buffer = 0.0f;
+
+//Tempo do começo do programa
+double time_accelerate;
+double time_turn_right;
+double time_turn_left;
+double time_break;
+double time_reverse;
+bool car_is_accelerating;
+bool car_is_turning_left;
+bool car_is_turning_right;
+bool car_is_stopping;
+bool car_is_reverse;
+bool car_is_stopped;
+float speed;
+//Posições atuais do carro
+glm::vec3 car_position = glm::vec3 (0,0,-10);
+glm::vec3 car_direction = glm::vec3 (0.3,0,0);
+float car_angle = 0;
+float car_acceleration  = 0;
 
 int main(int argc, char* argv[])
 {
@@ -278,6 +303,10 @@ int main(int argc, char* argv[])
     ComputeNormals(&planemodel);
     BuildTrianglesAndAddToVirtualScene(&planemodel);
 
+    ObjModel carmodel("../../data/navigator.obj");
+    ComputeNormals(&carmodel);
+    BuildTrianglesAndAddToVirtualScene(&carmodel);
+
     if ( argc > 1 )
     {
         ObjModel model(argv[1]);
@@ -333,8 +362,8 @@ int main(int argc, char* argv[])
 
         // Abaixo definimos as varáveis que efetivamente definem a câmera virtual.
         // Veja slide 159 do documento "Aula_08_Sistemas_de_Coordenadas.pdf".
-        glm::vec4 camera_position_c  = glm::vec4(x,y,z,1.0f); // Ponto "c", centro da câmera
-        glm::vec4 camera_lookat_l    = glm::vec4(0.0f,0.0f,0.0f,1.0f); // Ponto "l", para onde a câmera (look-at) estará sempre olhando
+        camera_position_c  = glm::vec4(x + camera_x_buffer, y, z + camera_z_buffer, 1.0f); // Ponto "c", centro da câmera
+        glm::vec4 camera_lookat_l    = glm::vec4(car_position.x,car_position.y,car_position.z,1.0f); // Ponto "l", para onde a câmera (look-at) estará sempre olhando
         glm::vec4 camera_view_vector = camera_lookat_l - camera_position_c; // Vetor "view", sentido para onde a câmera está virada
         glm::vec4 camera_up_vector   = glm::vec4(0.0f,1.0f,0.0f,0.0f); // Vetor "up"
 
@@ -350,7 +379,7 @@ int main(int argc, char* argv[])
         // estão no sentido negativo! Veja slides 180-183 do documento
         // "Aula_09_Projecoes.pdf".
         float nearplane = -0.1f;  // Posição do "near plane"
-        float farplane  = -10.0f; // Posição do "far plane"
+        float farplane  = -10000.0f; // Posição do "far plane"
 
         if (g_UsePerspectiveProjection)
         {
@@ -385,7 +414,7 @@ int main(int argc, char* argv[])
         #define SPHERE 0
         #define BUNNY  1
         #define PLANE  2
-
+        #define CAR 3
         // Desenhamos o modelo da esfera
         model = Matrix_Translate(-1.0f,0.0f,0.0f)
               * Matrix_Rotate_Z(0.6f)
@@ -401,6 +430,15 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, BUNNY);
         DrawVirtualObject("bunny");
+
+        // Desenhamos o carro
+        glm::mat4 car_model = Matrix_Translate(car_position.x,car_position.y,car_position.z)
+         * Matrix_Rotate_Z(0.0f)
+         * Matrix_Rotate_Y(3.14/2 - car_angle)
+         * Matrix_Rotate_X(-3.14/2);
+        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(car_model));
+        glUniform1i(object_id_uniform, CAR);
+        DrawVirtualObject("lincoln_navigator");
 
         // Desenhamos o plano do chão
         model = Matrix_Translate(0.0f,-1.1f,0.0f);
@@ -438,6 +476,9 @@ int main(int argc, char* argv[])
         // definidas anteriormente usando glfwSet*Callback() serão chamadas
         // pela biblioteca GLFW.
         glfwPollEvents();
+
+        //Moves the car
+        move_car();
     }
 
     // Finalizamos os recursos do sistema operacional
@@ -681,6 +722,7 @@ void BuildTrianglesAndAddToVirtualScene(ObjModel* model)
 
     for (size_t shape = 0; shape < model->shapes.size(); ++shape)
     {
+
         size_t first_index = indices.size();
         size_t num_triangles = model->shapes[shape].mesh.num_face_vertices.size();
 
@@ -750,6 +792,7 @@ void BuildTrianglesAndAddToVirtualScene(ObjModel* model)
         theobject.bbox_max = bbox_max;
 
         g_VirtualScene[model->shapes[shape].name] = theobject;
+        std::cout << model->shapes[shape].name << std::endl;
     }
 
     GLuint VBO_model_coefficients_id;
@@ -942,7 +985,7 @@ GLuint CreateGpuProgram(GLuint vertex_shader_id, GLuint fragment_shader_id)
         fprintf(stderr, "%s", output.c_str());
     }
 
-    // Os "Shader Objects" podem ser marcados para deleção após serem linkados 
+    // Os "Shader Objects" podem ser marcados para deleção após serem linkados
     glDeleteShader(vertex_shader_id);
     glDeleteShader(fragment_shader_id);
 
@@ -1045,21 +1088,21 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         // Deslocamento do cursor do mouse em x e y de coordenadas de tela!
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
-    
+
         // Atualizamos parâmetros da câmera com os deslocamentos
         g_CameraTheta -= 0.01f*dx;
         g_CameraPhi   += 0.01f*dy;
-    
+
         // Em coordenadas esféricas, o ângulo phi deve ficar entre -pi/2 e +pi/2.
         float phimax = 3.141592f/2;
         float phimin = -phimax;
-    
+
         if (g_CameraPhi > phimax)
             g_CameraPhi = phimax;
-    
+
         if (g_CameraPhi < phimin)
             g_CameraPhi = phimin;
-    
+
         // Atualizamos as variáveis globais para armazenar a posição atual do
         // cursor como sendo a última posição conhecida do cursor.
         g_LastCursorPosX = xpos;
@@ -1071,11 +1114,11 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         // Deslocamento do cursor do mouse em x e y de coordenadas de tela!
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
-    
+
         // Atualizamos parâmetros da antebraço com os deslocamentos
         g_ForearmAngleZ -= 0.01f*dx;
         g_ForearmAngleX += 0.01f*dy;
-    
+
         // Atualizamos as variáveis globais para armazenar a posição atual do
         // cursor como sendo a última posição conhecida do cursor.
         g_LastCursorPosX = xpos;
@@ -1087,11 +1130,11 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         // Deslocamento do cursor do mouse em x e y de coordenadas de tela!
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
-    
+
         // Atualizamos parâmetros da antebraço com os deslocamentos
         g_TorsoPositionX += 0.01f*dx;
         g_TorsoPositionY -= 0.01f*dy;
-    
+
         // Atualizamos as variáveis globais para armazenar a posição atual do
         // cursor como sendo a última posição conhecida do cursor.
         g_LastCursorPosX = xpos;
@@ -1114,70 +1157,60 @@ void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset)
 // tecla do teclado. Veja http://www.glfw.org/docs/latest/input_guide.html#input_key
 void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
 {
-    // Se o usuário pressionar a tecla ESC, fechamos a janela.
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, GL_TRUE);
 
-    // O código abaixo implementa a seguinte lógica:
-    //   Se apertar tecla X       então g_AngleX += delta;
-    //   Se apertar tecla shift+X então g_AngleX -= delta;
-    //   Se apertar tecla Y       então g_AngleY += delta;
-    //   Se apertar tecla shift+Y então g_AngleY -= delta;
-    //   Se apertar tecla Z       então g_AngleZ += delta;
-    //   Se apertar tecla shift+Z então g_AngleZ -= delta;
+    //Se o usuário apertar W, o carro vai ser marcado como "acelerando"
+    if (key == GLFW_KEY_W && action == GLFW_PRESS){
+        time_accelerate = glfwGetTime();
+        car_is_accelerating = true;
+        car_is_stopping = false;
 
-    float delta = 3.141592 / 16; // 22.5 graus, em radianos.
-
-    if (key == GLFW_KEY_X && action == GLFW_PRESS)
-    {
-        g_AngleX += (mod & GLFW_MOD_SHIFT) ? -delta : delta;
     }
 
-    if (key == GLFW_KEY_Y && action == GLFW_PRESS)
-    {
-        g_AngleY += (mod & GLFW_MOD_SHIFT) ? -delta : delta;
-    }
-    if (key == GLFW_KEY_Z && action == GLFW_PRESS)
-    {
-        g_AngleZ += (mod & GLFW_MOD_SHIFT) ? -delta : delta;
-    }
-
-    // Se o usuário apertar a tecla espaço, resetamos os ângulos de Euler para zero.
-    if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
-    {
-        g_AngleX = 0.0f;
-        g_AngleY = 0.0f;
-        g_AngleZ = 0.0f;
-        g_ForearmAngleX = 0.0f;
-        g_ForearmAngleZ = 0.0f;
-        g_TorsoPositionX = 0.0f;
-        g_TorsoPositionY = 0.0f;
+    //Se o usuário soltar W, o carro parará de ser marcado como acelerando
+    if (key == GLFW_KEY_W && action == GLFW_RELEASE){
+        car_is_accelerating = false;
+        if (!car_is_reverse){
+            car_is_stopping = true;
+            time_break = glfwGetTime();
+        }
     }
 
-    // Se o usuário apertar a tecla P, utilizamos projeção perspectiva.
-    if (key == GLFW_KEY_P && action == GLFW_PRESS)
-    {
-        g_UsePerspectiveProjection = true;
+    //Se o carro apertar A, o carro vai ser marcado como "Virando a esquerda"
+    if (key == GLFW_KEY_A && action == GLFW_PRESS && !car_is_stopped){
+        time_turn_left = glfwGetTime();
+        car_is_turning_left = true;
     }
 
-    // Se o usuário apertar a tecla O, utilizamos projeção ortográfica.
-    if (key == GLFW_KEY_O && action == GLFW_PRESS)
-    {
-        g_UsePerspectiveProjection = false;
+    //Se o o usuário soltar A, o carro parará de ser marcado como "Virando a esquerda"
+    if (key == GLFW_KEY_A && action == GLFW_RELEASE){
+        car_is_turning_left = false;
     }
 
-    // Se o usuário apertar a tecla H, fazemos um "toggle" do texto informativo mostrado na tela.
-    if (key == GLFW_KEY_H && action == GLFW_PRESS)
-    {
-        g_ShowInfoText = !g_ShowInfoText;
+    //Se o carro apertar D, o carro vai ser marcado como "Virando a direita"
+    if (key == GLFW_KEY_D && action == GLFW_PRESS && !car_is_stopped){
+        time_turn_right = glfwGetTime();
+        car_is_turning_right = true;
     }
 
-    // Se o usuário apertar a tecla R, recarregamos os shaders dos arquivos "shader_fragment.glsl" e "shader_vertex.glsl".
-    if (key == GLFW_KEY_R && action == GLFW_PRESS)
-    {
-        LoadShadersFromFiles();
-        fprintf(stdout,"Shaders recarregados!\n");
-        fflush(stdout);
+    //Se o o usuário soltar D, o carro parará de ser marcado como "Virando a direita"
+    if (key == GLFW_KEY_D && action == GLFW_RELEASE){
+        car_is_turning_right= false;
+    }
+
+        //Se o carro apertar S, o carro vai ser marcado como "Freiando"
+    if (key == GLFW_KEY_S && action == GLFW_PRESS){
+        time_reverse = glfwGetTime();
+        car_is_reverse = true;
+        car_is_stopping = false;
+    }
+
+    //Se o o usuário soltar S, o carro parará de ser marcado como "Freiando"
+    if (key == GLFW_KEY_S && action == GLFW_RELEASE){
+        car_is_reverse = false;
+        if (!car_is_accelerating){
+            car_is_stopping = true;
+            time_break = glfwGetTime();
+        }
     }
 }
 
@@ -1272,7 +1305,7 @@ void TextRendering_ShowFramesPerSecond(GLFWwindow* window)
     if ( ellapsed_seconds > 1.0f )
     {
         numchars = snprintf(buffer, 20, "%.2f fps", ellapsed_frames / ellapsed_seconds);
-    
+
         old_seconds = seconds;
         ellapsed_frames = 0;
     }
@@ -1452,5 +1485,97 @@ void PrintObjModelInfo(ObjModel* model)
   }
 }
 
+
+
 // set makeprg=cd\ ..\ &&\ make\ run\ >/dev/null
 // vim: set spell spelllang=pt_br :
+
+void move_car(){
+
+    if (car_is_accelerating){
+        float time_now = glfwGetTime();
+        float time_passed = time_now - time_accelerate;
+        time_accelerate = time_now;
+        if (speed >= 0)
+            speed += time_passed/7;
+        if (speed < 0)
+            speed += time_passed/3;
+        if (speed > 1)
+            speed = 1;
+
+
+    }
+
+
+    if (car_is_reverse){
+        float time_now = glfwGetTime();
+        float time_passed = time_now - time_reverse;
+        time_reverse = time_now;
+        if (speed <= 0)
+            speed -= time_passed/7;
+        if (speed > 0)
+            speed -= time_passed/3;
+        if (speed < -1)
+            speed = -1;
+    }
+
+
+    if (!(car_is_accelerating || car_is_reverse || car_is_stopping))
+        car_is_stopped = true;
+
+    if ((car_is_accelerating || car_is_reverse || car_is_stopping) && car_is_stopped){
+        car_is_stopped = false;
+        time_turn_left = glfwGetTime();
+        time_turn_right = glfwGetTime();
+    }
+
+    if (car_is_turning_left && !car_is_stopped){
+        float time_now = glfwGetTime();
+        float time_passed = time_now - time_turn_left;
+        time_turn_left = time_now;
+        car_angle = car_angle - (time_passed * speed);
+
+    }
+
+    if (car_is_turning_right && !car_is_stopped){
+        float time_now = glfwGetTime();
+        float time_passed = time_now - time_turn_right;
+        time_turn_right = time_now;
+        car_angle = car_angle + (time_passed * speed);
+
+    }
+
+
+    if (car_is_stopping){
+        float time_now = glfwGetTime();
+        float time_passed = time_now - time_break;
+        time_break = time_now;
+
+        if (speed > 0){
+            speed -= time_passed/8;
+            if (speed < 0){
+                speed = 0;
+                car_is_stopping = false;
+            }
+        }
+
+        if (speed < 0){
+            speed += time_passed /8;
+            if (speed > 0){
+                speed = 0;
+                car_is_stopping = false;
+            }
+        }
+    }
+
+
+
+    car_position.x = car_position.x + speed * cos(car_angle);
+    camera_x_buffer = camera_x_buffer + speed * cos(car_angle);
+
+    car_position.z = car_position.z + speed * sin(car_angle);
+    camera_z_buffer = camera_z_buffer + speed * sin(car_angle);
+}
+
+
+
