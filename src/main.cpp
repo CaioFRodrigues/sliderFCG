@@ -162,8 +162,8 @@ bool g_MiddleMouseButtonPressed = false; // Análogo para botão do meio do mous
 // usuário através do mouse (veja função CursorPosCallback()). A posição
 // efetiva da câmera é calculada dentro da função main(), dentro do loop de
 // renderização.
-float g_CameraTheta = 0.0f; // Ângulo no plano ZX em relação ao eixo Z
-float g_CameraPhi = 0.0f;   // Ângulo em relação ao eixo Y
+float g_CameraTheta = -2.020f; // Ângulo no plano ZX em relação ao eixo Z
+float g_CameraPhi = 0.4115f;   // Ângulo em relação ao eixo Y
 float g_CameraDistance = 25.0f; // Distância da câmera para a origem
 
 // Variáveis que controlam rotação do antebraço
@@ -197,6 +197,13 @@ GLuint g_NumLoadedTextures = 0;
 glm::vec4 camera_position_c; // Ponto "c", centro da câmera
 float camera_x_buffer = 0.0f;
 float camera_z_buffer = 0.0f;
+float camera_theta_buffer = 0.0f;
+float camera_phi_buffer = 0.0f;
+
+class Rectangle;
+class Map;
+
+//Rectangle rectangles[50][50];
 
 //Tempo do começo do programa
 double time_accelerate;
@@ -291,22 +298,26 @@ int main(int argc, char* argv[])
     LoadTextureImage("../../data/tc-earth_nightmap_citylights.gif"); // TextureImage1
 
     // Construímos a representação de objetos geométricos através de malhas de triângulos
-    ObjModel spheremodel("../../data/sphere.obj");
-    ComputeNormals(&spheremodel);
-    BuildTrianglesAndAddToVirtualScene(&spheremodel);
-
-    ObjModel bunnymodel("../../data/bunny.obj");
-    ComputeNormals(&bunnymodel);
-    BuildTrianglesAndAddToVirtualScene(&bunnymodel);
+    ObjModel carmodel("../../data/navigator.obj");
+    ComputeNormals(&carmodel);
+    BuildTrianglesAndAddToVirtualScene(&carmodel);
 
     ObjModel planemodel("../../data/plane.obj");
     ComputeNormals(&planemodel);
     BuildTrianglesAndAddToVirtualScene(&planemodel);
 
-    ObjModel carmodel("../../data/navigator.obj");
-    ComputeNormals(&carmodel);
-    BuildTrianglesAndAddToVirtualScene(&carmodel);
-
+    float position_x = 0.0f;
+    float position_y = 0.0f;
+    int ID = 3;
+   /* for(int i = 0; i < 50; i++){
+        for(int j = 0; j < 50; j++){
+            ObjModel planemodel("../../data/plane.obj");
+            ComputeNormals(&planemodel);
+            BuildTrianglesAndAddToVirtualScene(&planemodel);
+            this.rectangles[i][j] = new Rectangle(position_x, position_y, 2, 2, planemodel, );
+        }
+    }
+    */
     if ( argc > 1 )
     {
         ObjModel model(argv[1]);
@@ -356,9 +367,10 @@ int main(int argc, char* argv[])
         // controladas pelo mouse do usuário. Veja as funções CursorPosCallback()
         // e ScrollCallback().
         float r = g_CameraDistance;
-        float y = r*sin(g_CameraPhi);
-        float z = r*cos(g_CameraPhi)*cos(g_CameraTheta);
-        float x = r*cos(g_CameraPhi)*sin(g_CameraTheta);
+        float y = r*sin(g_CameraPhi + camera_phi_buffer);
+        float z = r*cos(g_CameraPhi + camera_phi_buffer)*cos(g_CameraTheta + camera_theta_buffer);
+        float x = r*cos(g_CameraPhi + camera_phi_buffer)*sin(g_CameraTheta + camera_theta_buffer);
+
 
         // Abaixo definimos as varáveis que efetivamente definem a câmera virtual.
         // Veja slide 159 do documento "Aula_08_Sistemas_de_Coordenadas.pdf".
@@ -411,25 +423,9 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(view_uniform       , 1 , GL_FALSE , glm::value_ptr(view));
         glUniformMatrix4fv(projection_uniform , 1 , GL_FALSE , glm::value_ptr(projection));
 
-        #define SPHERE 0
-        #define BUNNY  1
-        #define PLANE  2
-        #define CAR 3
-        // Desenhamos o modelo da esfera
-        model = Matrix_Translate(-1.0f,0.0f,0.0f)
-              * Matrix_Rotate_Z(0.6f)
-              * Matrix_Rotate_X(0.2f)
-              * Matrix_Rotate_Y(g_AngleY + (float)glfwGetTime() * 0.1f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, SPHERE);
-        DrawVirtualObject("sphere");
 
-        // Desenhamos o modelo do coelho
-        model = Matrix_Translate(1.0f,0.0f,0.0f)
-              * Matrix_Rotate_X(g_AngleX + (float)glfwGetTime() * 0.1f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, BUNNY);
-        DrawVirtualObject("bunny");
+        #define PLANE  0
+        #define CAR 1
 
         // Desenhamos o carro
         glm::mat4 car_model = Matrix_Translate(car_position.x,car_position.y,car_position.z)
@@ -439,6 +435,8 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(car_model));
         glUniform1i(object_id_uniform, CAR);
         DrawVirtualObject("lincoln_navigator");
+
+        printf("\nX:%f, Y:%f, Z:%f", car_position.x, car_position.y, car_position.z);
 
         // Desenhamos o plano do chão
         model = Matrix_Translate(0.0f,-1.1f,0.0f);
@@ -1571,11 +1569,151 @@ void move_car(){
 
 
     car_position.x = car_position.x + speed * cos(car_angle);
+
+    //printf("\nCOS(CAR_ANGLE):%f", cos(car_angle));
     camera_x_buffer = camera_x_buffer + speed * cos(car_angle);
 
     car_position.z = car_position.z + speed * sin(car_angle);
+    //camera_theta_buffer = -cos(car_angle) * 10;
+    //printf("\nSIN(CAR_ANGLE):%f", sin(car_angle));
     camera_z_buffer = camera_z_buffer + speed * sin(car_angle);
 }
+
+
+//////////// RECTANGLE //////////////////////////////////////////////////////////////////////////////
+class Rectangle
+{
+    private:
+        float positionX;
+        float positionY;
+        int width;
+        int height;
+        ObjModel model=NULL;
+    public:
+        Rectangle(float positionX, float positionY, int width, int height, ObjModel model)
+        {
+            this->positionX = positionX;
+            this->positionY = positionY;
+            this->width = width;
+            this->height = height;
+            this->model = model;
+        }
+        float getPositionX();
+        float getPositionY();
+        int getWidth();
+        int getHeight();
+        ObjModel getModel();
+        void setModel(ObjModel model);
+        bool collide(Rectangle rectangle);
+        bool isInside(float positionX, float positionY);
+};
+
+float Rectangle::getPositionX(){
+    return this->positionX;
+}
+
+float Rectangle::getPositionY(){
+    return this->positionY;
+}
+
+int Rectangle::getWidth(){
+    return this->width;
+}
+
+int Rectangle::getHeight(){
+    return this->height;
+}
+
+ObjModel Rectangle::getModel(){
+  return this->model;
+}
+
+void Rectangle::setModel(ObjModel model){
+  this->model = model;
+}
+
+bool Rectangle::collide(Rectangle rectangleTwo){
+    float rectangleTwo_posX = rectangleTwo.getPositionX();
+    float rectangleTwo_posY = rectangleTwo.getPositionY();
+    float rectangleTwo_width = rectangleTwo.getWidth();
+    float rectangleTwo_height = rectangleTwo.getHeight();
+    float position1_X = (rectangleTwo_posX + 1);
+    float position1_Y = (rectangleTwo_posY + 1);
+    float position2_X = (rectangleTwo_posX + rectangleTwo_width - 1);
+    float position2_Y = (rectangleTwo_posY + 1);
+    float position3_X = (rectangleTwo_posX + rectangleTwo_width - 1);
+    float position3_Y = (rectangleTwo_posY + rectangleTwo_height - 1);
+    float position4_X = (rectangleTwo_posX + 1);
+    float position4_Y = (rectangleTwo_posY + rectangleTwo_height - 1);
+
+    if (this->isInside(position1_X, position1_Y) or this->isInside(position2_X, position2_Y) or this->isInside(position3_X, position3_Y) or this->isInside(position4_X, position4_Y))
+        return true;
+    return false;
+}
+
+bool Rectangle::isInside(float positionX, float positionY){
+    if (this->positionX <= positionX < this->positionX + this->width)
+            if (this->positionY <= positionY < this->positionY + this->height)
+                return true;
+    return false;
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+//////////////  MAP  ////////////////////////////////////////////////////////////////////////////////////////////
+/*
+class Map
+{
+    private:
+        int dimension_x=50;
+        int dimension_y=50;
+        int rectangle_width;
+        int rectangle_height;
+        void initializeMap();
+    public:
+        Map(int dimension_x, int dimension_y, int rectangle_width, int rectangle_height){
+            this.dimension_x = dimension_x;
+            this.dimension_y = dimension_y;
+            this.rectangle_width = rectangle_width;
+            this.rectangle_height = rectangle_height;
+        }
+}
+
+int Map::getDimension_X(){
+    return this.dimension_x;
+}
+
+int Map::getDimension_Y(){
+    return this.dimension_y;
+}
+
+int Map::getRectangle_width(){
+    return this.rectangle_width;
+}
+
+int Map::getDimension_height(){
+    return this.dimension_x;
+}
+
+void Map::initializeMap(){
+    float position_x = 0.0f;
+    float position_y = 0.0f;
+    int ID =
+    for(int i = 0; i < this.dimension_x; i++){
+        for(int j = 0; j < this.dimension_y; j++){
+            ObjModel planemodel("../../data/plane.obj");
+            ComputeNormals(&planemodel);
+            BuildTrianglesAndAddToVirtualScene(&planemodel);
+            this.rectangles[i][j] = new Rectangle(position_x, position_y, 2, 2, planemodel, );
+        }
+    }
+}
+*/
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 
 
 
