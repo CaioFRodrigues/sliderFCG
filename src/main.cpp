@@ -301,7 +301,8 @@ int main(int argc, char* argv[])
     ComputeNormals(&planemodel);
     BuildTrianglesAndAddToVirtualScene(&planemodel);
 
-    ObjModel carmodel("../../data/navigator.obj");
+    ObjModel carmodel("../../data/Navi/navigator.obj");
+    printf ("oi");
     ComputeNormals(&carmodel);
     BuildTrianglesAndAddToVirtualScene(&carmodel);
 
