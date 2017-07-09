@@ -45,7 +45,7 @@
 // Headers locais, definidos na pasta "include/"
 #include "utils.h"
 #include "matrices.h"
-
+#define PI 3.14159265
 // Estrutura que representa um modelo geométrico carregado a partir de um
 // arquivo ".obj". Veja https://en.wikipedia.org/wiki/Wavefront_.obj_file .
 struct ObjModel
@@ -118,6 +118,8 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 
+//Funções de movimento do carro
+void move_car();
 // Definimos uma estrutura que armazenará dados necessários para renderizar
 // cada objeto da cena virtual.
 struct SceneObject
@@ -191,6 +193,26 @@ GLint bbox_max_uniform;
 
 // Número de texturas carregadas pela função LoadTextureImage()
 GLuint g_NumLoadedTextures = 0;
+
+
+
+//Tempo do começo do programa
+double time_accelerate;
+double time_turn_right;
+double time_turn_left;
+double time_break;
+double time_reverse;
+bool car_is_accelerating;
+bool car_is_turning_left;
+bool car_is_turning_right;
+bool car_is_stopping;
+bool car_is_reverse;
+float speed;
+//Posições atuais do carro
+glm::vec3 car_position = glm::vec3 (0,0,-10);
+glm::vec3 car_direction = glm::vec3 (0.3,0,0);
+float car_angle = 0;
+float car_acceleration  = 0;
 
 int main(int argc, char* argv[])
 {
@@ -354,7 +376,7 @@ int main(int argc, char* argv[])
         // estão no sentido negativo! Veja slides 180-183 do documento
         // "Aula_09_Projecoes.pdf".
         float nearplane = -0.1f;  // Posição do "near plane"
-        float farplane  = -100.0f; // Posição do "far plane"
+        float farplane  = -10000.0f; // Posição do "far plane"
 
         if (g_UsePerspectiveProjection)
         {
@@ -407,13 +429,12 @@ int main(int argc, char* argv[])
         DrawVirtualObject("bunny");
 
         // Desenhamos o carro
-                // Desenhamos o modelo do coelho
-
-        model = Matrix_Translate(0.0f,0.0f,-20.0f) * Matrix_Rotate_Z(3.14/2)
-              * Matrix_Rotate_X(0.0f)
-              * Matrix_Rotate_Y(3.14/2);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, 3);
+        glm::mat4 car_model = Matrix_Translate(car_position.x,car_position.y,car_position.z)
+         * Matrix_Rotate_Z(0.0f)
+         * Matrix_Rotate_Y(3.14/2 - car_angle)
+         * Matrix_Rotate_X(-3.14/2);
+        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(car_model));
+        glUniform1i(object_id_uniform, CAR);
         DrawVirtualObject("lincoln_navigator");
 
         // Desenhamos o plano do chão
@@ -452,6 +473,9 @@ int main(int argc, char* argv[])
         // definidas anteriormente usando glfwSet*Callback() serão chamadas
         // pela biblioteca GLFW.
         glfwPollEvents();
+
+        //Moves the car
+        move_car();
     }
 
     // Finalizamos os recursos do sistema operacional
@@ -1130,70 +1154,59 @@ void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset)
 // tecla do teclado. Veja http://www.glfw.org/docs/latest/input_guide.html#input_key
 void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
 {
-    // Se o usuário pressionar a tecla ESC, fechamos a janela.
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, GL_TRUE);
 
-    // O código abaixo implementa a seguinte lógica:
-    //   Se apertar tecla X       então g_AngleX += delta;
-    //   Se apertar tecla shift+X então g_AngleX -= delta;
-    //   Se apertar tecla Y       então g_AngleY += delta;
-    //   Se apertar tecla shift+Y então g_AngleY -= delta;
-    //   Se apertar tecla Z       então g_AngleZ += delta;
-    //   Se apertar tecla shift+Z então g_AngleZ -= delta;
-
-    float delta = 3.141592 / 16; // 22.5 graus, em radianos.
-
-    if (key == GLFW_KEY_X && action == GLFW_PRESS)
-    {
-        g_AngleX += (mod & GLFW_MOD_SHIFT) ? -delta : delta;
+    //Se o usuário apertar W, o carro vai ser marcado como "acelerando"
+    if (key == GLFW_KEY_W && action == GLFW_PRESS){
+        time_accelerate = glfwGetTime();
+        car_is_accelerating = true;
+        car_is_stopping = false;
     }
 
-    if (key == GLFW_KEY_Y && action == GLFW_PRESS)
-    {
-        g_AngleY += (mod & GLFW_MOD_SHIFT) ? -delta : delta;
-    }
-    if (key == GLFW_KEY_Z && action == GLFW_PRESS)
-    {
-        g_AngleZ += (mod & GLFW_MOD_SHIFT) ? -delta : delta;
-    }
-
-    // Se o usuário apertar a tecla espaço, resetamos os ângulos de Euler para zero.
-    if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
-    {
-        g_AngleX = 0.0f;
-        g_AngleY = 0.0f;
-        g_AngleZ = 0.0f;
-        g_ForearmAngleX = 0.0f;
-        g_ForearmAngleZ = 0.0f;
-        g_TorsoPositionX = 0.0f;
-        g_TorsoPositionY = 0.0f;
+    //Se o usuário soltar W, o carro parará de ser marcado como acelerando
+    if (key == GLFW_KEY_W && action == GLFW_RELEASE){
+        car_is_accelerating = false;
+        if (!car_is_reverse){
+            car_is_stopping = true;
+            time_break = glfwGetTime();
+        }
     }
 
-    // Se o usuário apertar a tecla P, utilizamos projeção perspectiva.
-    if (key == GLFW_KEY_P && action == GLFW_PRESS)
-    {
-        g_UsePerspectiveProjection = true;
+    //Se o carro apertar A, o carro vai ser marcado como "Virando a esquerda"
+    if (key == GLFW_KEY_A && action == GLFW_PRESS){
+        time_turn_left = glfwGetTime();
+        car_is_turning_left = true;
     }
 
-    // Se o usuário apertar a tecla O, utilizamos projeção ortográfica.
-    if (key == GLFW_KEY_O && action == GLFW_PRESS)
-    {
-        g_UsePerspectiveProjection = false;
+    //Se o o usuário soltar A, o carro parará de ser marcado como "Virando a esquerda"
+    if (key == GLFW_KEY_A && action == GLFW_RELEASE){
+        car_is_turning_left = false;
     }
 
-    // Se o usuário apertar a tecla H, fazemos um "toggle" do texto informativo mostrado na tela.
-    if (key == GLFW_KEY_H && action == GLFW_PRESS)
-    {
-        g_ShowInfoText = !g_ShowInfoText;
+    //Se o carro apertar D, o carro vai ser marcado como "Virando a direita"
+    if (key == GLFW_KEY_D && action == GLFW_PRESS){
+        time_turn_right = glfwGetTime();
+        car_is_turning_right = true;
     }
 
-    // Se o usuário apertar a tecla R, recarregamos os shaders dos arquivos "shader_fragment.glsl" e "shader_vertex.glsl".
-    if (key == GLFW_KEY_R && action == GLFW_PRESS)
-    {
-        LoadShadersFromFiles();
-        fprintf(stdout,"Shaders recarregados!\n");
-        fflush(stdout);
+    //Se o o usuário soltar D, o carro parará de ser marcado como "Virando a direita"
+    if (key == GLFW_KEY_D && action == GLFW_RELEASE){
+        car_is_turning_right= false;
+    }
+
+        //Se o carro apertar S, o carro vai ser marcado como "Freiando"
+    if (key == GLFW_KEY_S && action == GLFW_PRESS){
+        time_reverse = glfwGetTime();
+        car_is_reverse = true;
+        car_is_stopping = false;
+    }
+
+    //Se o o usuário soltar S, o carro parará de ser marcado como "Freiando"
+    if (key == GLFW_KEY_S && action == GLFW_RELEASE){
+        car_is_reverse = false;
+        if (!car_is_accelerating){
+            car_is_stopping = true;
+            time_break = glfwGetTime();
+        }
     }
 }
 
@@ -1468,5 +1481,78 @@ void PrintObjModelInfo(ObjModel* model)
   }
 }
 
+
+
 // set makeprg=cd\ ..\ &&\ make\ run\ >/dev/null
 // vim: set spell spelllang=pt_br :
+
+void move_car(){
+
+    if (car_is_accelerating){
+        float time_now = glfwGetTime();
+        float time_passed = time_now - time_accelerate;
+        time_accelerate = time_now;
+        speed += time_passed/6;
+        if (speed > 1)
+            speed = 1;
+
+
+    }
+
+
+    if (car_is_reverse){
+        float time_now = glfwGetTime();
+        float time_passed = time_now - time_reverse;
+        time_reverse = time_now;
+        speed -= time_passed/7;
+        if (speed < -1)
+            speed = -1;
+    }
+
+
+    if (car_is_turning_left && (car_is_accelerating || car_is_reverse || car_is_stopping)){
+        float time_now = glfwGetTime();
+        float time_passed = time_now - time_turn_left;
+        time_turn_left = time_now;
+        car_angle = car_angle - time_passed;
+
+    }
+
+    if (car_is_turning_right && (car_is_accelerating || car_is_reverse || car_is_stopping)){
+        float time_now = glfwGetTime();
+        float time_passed = time_now - time_turn_right;
+        time_turn_right = time_now;
+        car_angle = car_angle + time_passed;
+
+    }
+
+    if (car_is_stopping){
+        float time_now = glfwGetTime();
+        float time_passed = time_now - time_break;
+        time_break = time_now;
+
+        if (speed > 0){
+            speed -= time_passed/10;
+            if (speed < 0){
+                speed = 0;
+                car_is_stopping = false;
+            }
+        }
+
+        if (speed < 0){
+            speed += time_passed /10;
+            if (speed > 0){
+                speed = 0;
+                car_is_stopping = false;
+            }
+        }
+    }
+
+
+
+    car_position.x = car_position.x + speed * cos(car_angle);
+    car_position.z = car_position.z + speed * sin(car_angle);
+}
+
+
+
