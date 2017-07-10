@@ -19,8 +19,13 @@ uniform mat4 view;
 uniform mat4 projection;
 
 // Identificador que define qual objeto está sendo desenhado no momento
-#define CAR 1
-#define LAMPPOST 0
+
+    #define LAMPPOST 0
+    #define PLANE 0
+    #define CAR 1
+    #define GRASS_PLANE 2
+    #define ICE_PLANE 3
+    #define LAVA_PLANE 4
 uniform int object_id;
 
 // Parâmetros da axis-aligned bounding box (AABB) do modelo
@@ -31,7 +36,9 @@ uniform vec4 bbox_max;
 uniform sampler2D TextureImage0;
 uniform sampler2D TextureImage1;
 uniform sampler2D TextureImage2;
-
+uniform sampler2D TextureImage3;
+uniform sampler2D TextureImage4;
+uniform sampler2D TextureImage5;
 // O valor de saída ("out") de um Fragment Shader é a cor final do fragmento.
 out vec3 color;
 
@@ -114,6 +121,60 @@ void main()
             Kd0 = texture(TextureImage1, vec2(U,V)).rgb;
         else Kd0 = texture(TextureImage2, vec2(U,V)).rgb;
     }
+    if (object_id == GRASS_PLANE){
+
+        float minx = bbox_min.x;
+        float maxx = bbox_max.x;
+
+        float miny = bbox_min.y;
+        float maxy = bbox_max.y;
+
+        float minz = bbox_min.z;
+        float maxz = bbox_max.z;
+
+        // Utilize as variáveis min*/max* definidas acima para normalizar as
+        // coordenadas de textura U e V dentro do intervalo [0,1]. Veja 149
+        // do documento "Aula_20_e_21_Mapeamento_de_Texturas.pdf".
+        U = (position_model.x - minx)/(maxx-minx);
+        V = (position_model.y - miny)/(maxy-miny);
+        Kd0 = texture(TextureImage3, vec2(U,V)).rgb;
+    }
+    if (object_id == LAVA_PLANE){
+
+        float minx = bbox_min.x;
+        float maxx = bbox_max.x;
+
+        float miny = bbox_min.y;
+        float maxy = bbox_max.y;
+
+        float minz = bbox_min.z;
+        float maxz = bbox_max.z;
+
+        // Utilize as variáveis min*/max* definidas acima para normalizar as
+        // coordenadas de textura U e V dentro do intervalo [0,1]. Veja 149
+        // do documento "Aula_20_e_21_Mapeamento_de_Texturas.pdf".
+        U = (position_model.x - minx)/(maxx-minx);
+        V = (position_model.y - miny)/(maxy-miny);
+        Kd0 = texture(TextureImage4, vec2(U,V)).rgb;
+    }
+    if (object_id == ICE_PLANE){
+
+        float minx = bbox_min.x;
+        float maxx = bbox_max.x;
+
+        float miny = bbox_min.y;
+        float maxy = bbox_max.y;
+
+        float minz = bbox_min.z;
+        float maxz = bbox_max.z;
+
+        // Utilize as variáveis min*/max* definidas acima para normalizar as
+        // coordenadas de textura U e V dentro do intervalo [0,1]. Veja 149
+        // do documento "Aula_20_e_21_Mapeamento_de_Texturas.pdf".
+        U = (position_model.x - minx)/(maxx-minx);
+        V = (position_model.y - miny)/(maxy-miny);
+        Kd0 = texture(TextureImage5, vec2(U,V)).rgb;
+    }
 
     // Obtemos a refletância difusa a partir da leitura da imagem TextureImage0
 
@@ -124,7 +185,7 @@ void main()
     float phong_specular_term  = pow(max(dot(r,v),0),1);
 
 
-    color = Kd0 * (0.01 + (lambert * 0.2 + ((lambert_from_post + phong_specular_term))));
+    color = Kd0 * (0.01 +  (lambert*0.2 + (lambert_from_post + phong_specular_term) * 0.8 ));
 
     // Cor final com correção gamma, considerando monitor sRGB.
     // Veja https://en.wikipedia.org/w/index.php?title=Gamma_correction&oldid=751281772#Windows.2C_Mac.2C_sRGB_and_TV.2Fvideo_standard_gammas
