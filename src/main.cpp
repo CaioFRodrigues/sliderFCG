@@ -28,6 +28,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <iostream>
+#include <math.h>
 // Headers das bibliotecas OpenGL
 #include <glad/glad.h>   // Criação de contexto OpenGL 3.3
 #include <GLFW/glfw3.h>  // Criação de janelas do sistema operacional
@@ -58,7 +59,7 @@ struct ObjModel
     // Veja: https://github.com/syoyo/tinyobjloader
     ObjModel(const char* filename, const char* basepath = NULL, bool triangulate = true)
     {
-        printf("Carregando modelo \"%s\"... ", filename);
+        //printf("Carregando modelo \"%s\"... ", filename);
 
         std::string err;
         bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename, basepath, triangulate);
@@ -69,7 +70,7 @@ struct ObjModel
         if (!ret)
             throw std::runtime_error("Erro ao carregar modelo.");
 
-        printf("OK.\n");
+        //printf("OK.\n");
     }
 };
 
@@ -134,30 +135,45 @@ struct SceneObject
 };
 
 //////////// RECTANGLE //////////////////////////////////////////////////////////////////////////////
+#define GRASS 1
+#define ICE 2
+#define LAVA 3
 namespace RECTANGLE{
     class Rectangle
     {
-        private:
-            float positionX;
-            float positionY;
-            int width;
-            int height;
-            ObjModel model=NULL;
         public:
-            Rectangle(float positionX, float positionY, int width, int height, ObjModel model)
+            float positionX = 0.0f;
+            float positionY = 0.0f;
+            int width = 0;
+            int height = 0;
+            int ID = 0;
+            int tipo = 0;
+            Rectangle(float positionX, float positionY, int width, int height, int ID, int tipo)
             {
                 this->positionX = positionX;
                 this->positionY = positionY;
                 this->width = width;
                 this->height = height;
-                this->model = model;
+                //this->model = model;
+                this->ID = ID;
+                this->tipo = tipo;
             }
+
+            Rectangle(){
+                this->width = 2;
+                this->height = 2;
+            }
+
             float getPositionX();
+            void setPositionX(float positionX);
             float getPositionY();
+            void setPositionY(float positionY);
+            int getID();
+            void setID(int ID);
             int getWidth();
             int getHeight();
-            ObjModel getModel();
-            void setModel(ObjModel model);
+            //ObjModel getModel();
+           // void setModel(ObjModel model);
             bool collide(Rectangle rectangle);
             bool isInside(float positionX, float positionY);
     };
@@ -166,8 +182,16 @@ namespace RECTANGLE{
         return this->positionX;
     }
 
+    void Rectangle::setPositionX(float positionX){
+        this->positionX = positionX;
+    }
+
     float Rectangle::getPositionY(){
         return this->positionY;
+    }
+
+    void Rectangle::setPositionY(float positionY){
+        this->positionY = positionY;
     }
 
     int Rectangle::getWidth(){
@@ -178,14 +202,21 @@ namespace RECTANGLE{
         return this->height;
     }
 
-    ObjModel Rectangle::getModel(){
-      return this->model;
+   // ObjModel Rectangle::getModel(){
+   //   return this->model;
+   // }
+
+    //void Rectangle::setModel(ObjModel model){
+    //  this->model = model;
+    //}
+
+    int Rectangle::getID(){
+        return this->ID;
     }
 
-    void Rectangle::setModel(ObjModel model){
-      this->model = model;
+    void Rectangle::setID(int ID){
+        this->ID = ID;
     }
-
     bool Rectangle::collide(Rectangle rectangleTwo){
         float rectangleTwo_posX = rectangleTwo.getPositionX();
         float rectangleTwo_posY = rectangleTwo.getPositionY();
@@ -207,15 +238,14 @@ namespace RECTANGLE{
 
 
     bool Rectangle::isInside(float positionX, float positionY){
-        if (this->positionX <= positionX < this->positionX + this->width)
-                if (this->positionY <= positionY < this->positionY + this->height)
-                    return true;
+        if(this->positionX <= positionX && positionX < this->positionX + this->width){
+            if(this->positionY <= positionY && positionY < this->positionY + this->height){
+                return true;
+            }
+        }
         return false;
     }
-
 }
-
-using namespace RECTANGLE;
 
 
 // Abaixo definimos variáveis globais utilizadas em várias funções do código.
@@ -247,9 +277,20 @@ bool g_MiddleMouseButtonPressed = false; // Análogo para botão do meio do mous
 // usuário através do mouse (veja função CursorPosCallback()). A posição
 // efetiva da câmera é calculada dentro da função main(), dentro do loop de
 // renderização.
-float g_CameraTheta = -2.020f; // Ângulo no plano ZX em relação ao eixo Z
-float g_CameraPhi = 0.4115f;   // Ângulo em relação ao eixo Y
+float g_CameraTheta = -0.57f; // Ângulo no plano ZX em relação ao eixo Z
+float g_CameraPhi = 0.341f;   // Ângulo em relação ao eixo Y
 float g_CameraDistance = 25.0f; // Distância da câmera para a origem
+float pitch = 0.0f;
+float yaw = 90.0f;
+
+glm::vec4 camera_position_c;
+glm::vec4 camera_lookat_l;
+
+bool W_pressed = false;
+bool A_pressed = false;
+bool S_pressed = false;
+bool D_pressed = false;
+bool FREE_CAMERA = false;
 
 // Variáveis que controlam rotação do antebraço
 float g_ForearmAngleZ = 0.0f;
@@ -279,14 +320,12 @@ GLint bbox_max_uniform;
 // Número de texturas carregadas pela função LoadTextureImage()
 GLuint g_NumLoadedTextures = 0;
 
-glm::vec4 camera_position_c; // Ponto "c", centro da câmera
 float camera_x_buffer = 0.0f;
 float camera_z_buffer = 0.0f;
 float camera_theta_buffer = 0.0f;
 float camera_phi_buffer = 0.0f;
 
-class Rectangle;
-class Map;
+//RECTANGLE::Rectangle rectangles = RECTANGLE::Rectangle(1.0f, 1.0f, 10, 10, ObjModel("teste"));
 
 //Rectangle rectangles[50][50];
 
@@ -304,10 +343,11 @@ bool car_is_reverse;
 bool car_is_stopped;
 float speed;
 //Posições atuais do carro
-glm::vec3 car_position = glm::vec3 (0,0,-10);
+glm::vec3 car_position = glm::vec3 (10.0f,0,20.0f);
 glm::vec3 car_direction = glm::vec3 (0.3,0,0);
 float car_angle = 0;
 float car_acceleration  = 0;
+bool carIsOnLava();
 
 int main(int argc, char* argv[])
 {
@@ -381,6 +421,10 @@ int main(int argc, char* argv[])
     // Carregamos duas imagens para serem utilizadas como textura
     LoadTextureImage("../../data/tc-earth_daymap_surface.jpg");      // TextureImage0
     LoadTextureImage("../../data/tc-earth_nightmap_citylights.gif"); // TextureImage1
+    LoadTextureImage("../../data/grass.png");
+    LoadTextureImage("../../data/lava.png");
+    LoadTextureImage("../../data/lava.png");
+
 
     // Construímos a representação de objetos geométricos através de malhas de triângulos
     ObjModel carmodel("../../data/navigator.obj");
@@ -391,18 +435,37 @@ int main(int argc, char* argv[])
     ComputeNormals(&planemodel);
     BuildTrianglesAndAddToVirtualScene(&planemodel);
 
+    #define PLANE  0
+    #define CAR 1
+    #define GRASS_PLANE 2
+    #define ICE_PLANE 3
+    #define LAVA_PLANE 4
+
     float position_x = 0.0f;
     float position_y = 0.0f;
     int ID = 3;
-   /* for(int i = 0; i < 50; i++){
+    RECTANGLE::Rectangle rectangles[100][50];
+    for(int i = 0; i < 100; i++){
         for(int j = 0; j < 50; j++){
             ObjModel planemodel("../../data/plane.obj");
             ComputeNormals(&planemodel);
             BuildTrianglesAndAddToVirtualScene(&planemodel);
-            this.rectangles[i][j] = new Rectangle(position_x, position_y, 2, 2, planemodel, );
+            rectangles[i][j] = RECTANGLE::Rectangle(position_x, position_y, 2, 2, GRASS_PLANE, GRASS);
+            position_x = position_x + 2.0f;
+            ID++;
         }
+        position_x = 0.0f;
+        position_y = position_y + 2.0f;
     }
-    */
+
+    //for(int i = 0; i < 1; i++){
+    //    rectangles[i][30].tipo = LAVA;
+    //    rectangles[i][30].ID = LAVA_PLANE;
+    //}
+
+    rectangles[2][30].tipo = LAVA;
+    rectangles[2][30].ID = LAVA_PLANE;
+
     if ( argc > 1 )
     {
         ObjModel model(argv[1]);
@@ -425,6 +488,7 @@ int main(int argc, char* argv[])
     glm::mat4 the_projection;
     glm::mat4 the_model;
     glm::mat4 the_view;
+    glm::mat4 view;
 
     // Ficamos em loop, renderizando, até que o usuário feche a janela
     while (!glfwWindowShouldClose(window))
@@ -447,27 +511,52 @@ int main(int argc, char* argv[])
         // os shaders de vértice e fragmentos)
         glUseProgram(program_id);
 
-        // Computamos a posição da câmera utilizando coordenadas esféricas.  As
-        // variáveis g_CameraDistance, g_CameraPhi, e g_CameraTheta são
-        // controladas pelo mouse do usuário. Veja as funções CursorPosCallback()
-        // e ScrollCallback().
-        float r = g_CameraDistance;
-        float y = r*sin(g_CameraPhi + camera_phi_buffer);
-        float z = r*cos(g_CameraPhi + camera_phi_buffer)*cos(g_CameraTheta + camera_theta_buffer);
-        float x = r*cos(g_CameraPhi + camera_phi_buffer)*sin(g_CameraTheta + camera_theta_buffer);
+        if(FREE_CAMERA){
+            camera_lookat_l = glm::vec4(
+            cos(glm::radians(yaw)) * cos(glm::radians(pitch)),
+            sin(glm::radians(pitch)),
+            sin(glm::radians(yaw)) * cos(glm::radians(pitch)),
+            1.0f);
+
+            glm::vec4 camera_view_vector = - camera_lookat_l; //- camera_position_c; // Vetor "view", sentido para onde a câmera está virada
+            glm::vec4 camera_up_vector   = glm::vec4(0.0f,1.0f,0.0f,0.0f); // Vetor "up"
+            glm::vec4 camera_right_vector = crossproduct(camera_view_vector, camera_up_vector);
 
 
-        // Abaixo definimos as varáveis que efetivamente definem a câmera virtual.
-        // Veja slide 159 do documento "Aula_08_Sistemas_de_Coordenadas.pdf".
-        camera_position_c  = glm::vec4(x + camera_x_buffer, y, z + camera_z_buffer, 1.0f); // Ponto "c", centro da câmera
-        glm::vec4 camera_lookat_l    = glm::vec4(car_position.x,car_position.y,car_position.z,1.0f); // Ponto "l", para onde a câmera (look-at) estará sempre olhando
-        glm::vec4 camera_view_vector = camera_lookat_l - camera_position_c; // Vetor "view", sentido para onde a câmera está virada
-        glm::vec4 camera_up_vector   = glm::vec4(0.0f,1.0f,0.0f,0.0f); // Vetor "up"
+            if (W_pressed)
+                camera_position_c += 0.3f * camera_view_vector;
+            if (S_pressed)
+                camera_position_c -= 0.3f * camera_view_vector;
+            if (A_pressed)
+                camera_position_c -= 0.3f * camera_right_vector;
+            if (D_pressed)
+                camera_position_c += 0.3f * camera_right_vector;
+            // Computamos a matriz "View" utilizando os parâmetros da câmera para
+            // definir o sistema de coordenadas da câmera.  Veja slide 162 do
+            // documento "Aula_08_Sistemas_de_Coordenadas.pdf".
+            view = Matrix_Camera_View(camera_position_c, camera_view_vector, camera_up_vector);
+        }else{
+            // Computamos a posição da câmera utilizando coordenadas esféricas.  As
+            // variáveis g_CameraDistance, g_CameraPhi, e g_CameraTheta são
+            // controladas pelo mouse do usuário. Veja as funções CursorPosCallback()
+            // e ScrollCallback().
+            float r = g_CameraDistance;
+            float y = r*sin(g_CameraPhi + camera_phi_buffer);
+            float z = r*cos(g_CameraPhi + camera_phi_buffer)*cos(g_CameraTheta + camera_theta_buffer);
+            float x = r*cos(g_CameraPhi + camera_phi_buffer)*sin(g_CameraTheta + camera_theta_buffer);
 
-        // Computamos a matriz "View" utilizando os parâmetros da câmera para
-        // definir o sistema de coordenadas da câmera.  Veja slide 162 do
-        // documento "Aula_08_Sistemas_de_Coordenadas.pdf".
-        glm::mat4 view = Matrix_Camera_View(camera_position_c, camera_view_vector, camera_up_vector);
+            // Abaixo definimos as varáveis que efetivamente definem a câmera virtual.
+            // Veja slide 159 do documento "Aula_08_Sistemas_de_Coordenadas.pdf".
+            camera_position_c  = glm::vec4(x + camera_x_buffer, y, z + camera_z_buffer, 1.0f); // Ponto "c", centro da câmera
+            glm::vec4 camera_lookat_l    = glm::vec4(car_position.x,car_position.y,car_position.z,1.0f); // Ponto "l", para onde a câmera (look-at) estará sempre olhando
+            glm::vec4 camera_view_vector = camera_lookat_l - camera_position_c; // Vetor "view", sentido para onde a câmera está virada
+            glm::vec4 camera_up_vector   = glm::vec4(0.0f,1.0f,0.0f,0.0f); // Vetor "up"
+
+            // Computamos a matriz "View" utilizando os parâmetros da câmera para
+            // definir o sistema de coordenadas da câmera.  Veja slide 162 do
+            // documento "Aula_08_Sistemas_de_Coordenadas.pdf".
+            view = Matrix_Camera_View(camera_position_c, camera_view_vector, camera_up_vector);
+        }
 
         // Agora computamos a matriz de Projeção.
         glm::mat4 projection;
@@ -509,9 +598,6 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(projection_uniform , 1 , GL_FALSE , glm::value_ptr(projection));
 
 
-        #define PLANE  0
-        #define CAR 1
-
         // Desenhamos o carro
         glm::mat4 car_model = Matrix_Translate(car_position.x,car_position.y,car_position.z)
          * Matrix_Rotate_Z(0.0f)
@@ -521,13 +607,14 @@ int main(int argc, char* argv[])
         glUniform1i(object_id_uniform, CAR);
         DrawVirtualObject("lincoln_navigator");
 
-        printf("\nX:%f, Y:%f, Z:%f", car_position.x, car_position.y, car_position.z);
-
-        // Desenhamos o plano do chão
-        model = Matrix_Translate(0.0f,-1.1f,0.0f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, PLANE);
-        DrawVirtualObject("plane");
+        for(int i = 0; i < 100; i++){
+            for(int j = 0; j < 50; j++){
+                model = Matrix_Translate(rectangles[i][j].positionX,-2.8f,rectangles[i][j].positionY);
+                glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+                glUniform1i(object_id_uniform, rectangles[i][j].getID());
+                DrawVirtualObject("plane");
+        }
+    }
 
         // Pegamos um vértice com coordenadas de modelo (0.5, 0.5, 0.5, 1) e o
         // passamos por todos os sistemas de coordenadas armazenados nas
@@ -562,6 +649,20 @@ int main(int argc, char* argv[])
 
         //Moves the car
         move_car();
+        for(int i = 0; i < 100; i++){
+            for(int j = 0; j < 50; j++){
+                if(rectangles[i][j].ID == LAVA_PLANE){
+                    if(rectangles[i][j].isInside(car_position.x, car_position.z)){
+                        car_position = glm::vec3 (10.0f,0,20.0f);
+                        car_direction = glm::vec3 (0.3,0,0);
+                        g_CameraTheta = -0.57f; // Ângulo no plano ZX em relação ao eixo Z
+                        g_CameraPhi = 0.341f;
+                        camera_x_buffer = 0.0f;
+                        camera_z_buffer = 0.0f;
+                    }
+                }
+            }
+        }
     }
 
     // Finalizamos os recursos do sistema operacional
@@ -571,10 +672,11 @@ int main(int argc, char* argv[])
     return 0;
 }
 
+
 // Função que carrega uma imagem para ser utilizada como textura
 void LoadTextureImage(const char* filename)
 {
-    printf("Carregando imagem \"%s\"... ", filename);
+    //printf("Carregando imagem \"%s\"... ", filename);
 
     // Primeiro fazemos a leitura da imagem do disco
     stbi_set_flip_vertically_on_load(true);
@@ -589,7 +691,7 @@ void LoadTextureImage(const char* filename)
         std::exit(EXIT_FAILURE);
     }
 
-    printf("OK (%dx%d).\n", width, height);
+    //printf("OK (%dx%d).\n", width, height);
 
     // Agora criamos objetos na GPU com OpenGL para armazenar a textura
     GLuint texture_id;
@@ -705,6 +807,7 @@ void LoadShadersFromFiles()
     glUniform1i(glGetUniformLocation(program_id, "TextureImage0"), 0);
     glUniform1i(glGetUniformLocation(program_id, "TextureImage1"), 1);
     glUniform1i(glGetUniformLocation(program_id, "TextureImage2"), 2);
+    glUniform1i(glGetUniformLocation(program_id, "TextureImage3"), 3);
     glUseProgram(0);
 }
 
@@ -1173,18 +1276,30 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         float dy = ypos - g_LastCursorPosY;
 
         // Atualizamos parâmetros da câmera com os deslocamentos
-        g_CameraTheta -= 0.01f*dx;
-        g_CameraPhi   += 0.01f*dy;
+        if(FREE_CAMERA){
+            yaw += 0.5f*dx;
+            pitch += 0.5f*dy;
 
-        // Em coordenadas esféricas, o ângulo phi deve ficar entre -pi/2 e +pi/2.
-        float phimax = 3.141592f/2;
-        float phimin = -phimax;
+        if (pitch > 89.0f)
+            pitch = 89.0f;
 
-        if (g_CameraPhi > phimax)
-            g_CameraPhi = phimax;
+        if (pitch < -89.0f)
+            pitch = -89.0f;
 
-        if (g_CameraPhi < phimin)
-            g_CameraPhi = phimin;
+        }else{
+            g_CameraTheta -= 0.01f*dx;
+            g_CameraPhi   += 0.01f*dy;
+
+            // Em coordenadas esféricas, o ângulo phi deve ficar entre -pi/2 e +pi/2.
+            float phimax = 3.141592f/2;
+            float phimin = -phimax;
+
+            if (g_CameraPhi > phimax)
+                g_CameraPhi = phimax;
+
+            if (g_CameraPhi < phimin)
+                g_CameraPhi = phimin;
+        }
 
         // Atualizamos as variáveis globais para armazenar a posição atual do
         // cursor como sendo a última posição conhecida do cursor.
@@ -1294,6 +1409,54 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
             car_is_stopping = true;
             time_break = glfwGetTime();
         }
+    }
+
+    if (key == GLFW_KEY_R && action == GLFW_PRESS && !FREE_CAMERA)
+    {
+        FREE_CAMERA = true;
+    }else if (key == GLFW_KEY_R && action == GLFW_PRESS && FREE_CAMERA)
+        {
+            FREE_CAMERA = false;
+        }
+
+    if (key == GLFW_KEY_T && action == GLFW_PRESS && FREE_CAMERA)
+    {
+        W_pressed = true;
+    }
+
+    if (key == GLFW_KEY_T && action == GLFW_RELEASE && FREE_CAMERA)
+    {
+        W_pressed = false;
+    }
+
+    if (key == GLFW_KEY_G && action == GLFW_PRESS && FREE_CAMERA)
+    {
+        S_pressed = true;
+    }
+
+    if (key == GLFW_KEY_G && action == GLFW_RELEASE && FREE_CAMERA)
+    {
+        S_pressed = false;
+    }
+
+    if (key == GLFW_KEY_F && action == GLFW_PRESS && FREE_CAMERA)
+    {
+        A_pressed = true;
+    }
+
+    if (key == GLFW_KEY_F && action == GLFW_RELEASE && FREE_CAMERA)
+    {
+        A_pressed = false;
+    }
+
+    if (key == GLFW_KEY_H && action == GLFW_PRESS && FREE_CAMERA)
+    {
+        D_pressed = true;
+    }
+
+    if (key == GLFW_KEY_H && action == GLFW_RELEASE && FREE_CAMERA)
+    {
+        D_pressed = false;
     }
 }
 
