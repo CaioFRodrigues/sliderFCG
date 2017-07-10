@@ -291,20 +291,14 @@ int main(int argc, char* argv[])
 
     // Carregamos duas imagens para serem utilizadas como textura
     LoadTextureImage("../../data/car_texture.jpg");      // TextureImage0
-    LoadTextureImage("../../data/tc-earth_nightmap_citylights.gif"); // TextureImage1
-
+    LoadTextureImage("../../data/lamp_ground_texture.jpg"); // TextureImage1
+    LoadTextureImage("../../data/lamp_light_texture.jpg");
     // Construímos a representação de objetos geométricos através de malhas de triângulos
-    ObjModel spheremodel("../../data/sphere.obj");
-    ComputeNormals(&spheremodel);
-    BuildTrianglesAndAddToVirtualScene(&spheremodel);
 
-    ObjModel bunnymodel("../../data/bunny.obj");
-    ComputeNormals(&bunnymodel);
-    BuildTrianglesAndAddToVirtualScene(&bunnymodel);
+    ObjModel lampmodel("../../data/lamp.obj");
+    ComputeNormals(&lampmodel);
+    BuildTrianglesAndAddToVirtualScene(&lampmodel);
 
-    ObjModel planemodel("../../data/plane.obj");
-    ComputeNormals(&planemodel);
-    BuildTrianglesAndAddToVirtualScene(&planemodel);
 
     ObjModel carmodel("../../data/navigator.obj");
     ComputeNormals(&carmodel);
@@ -414,25 +408,8 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(view_uniform       , 1 , GL_FALSE , glm::value_ptr(view));
         glUniformMatrix4fv(projection_uniform , 1 , GL_FALSE , glm::value_ptr(projection));
 
-        #define SPHERE 0
-        #define BUNNY  1
-        #define PLANE  2
-        #define CAR 3
-        // Desenhamos o modelo da esfera
-        model = Matrix_Translate(-1.0f,0.0f,0.0f)
-              * Matrix_Rotate_Z(0.6f)
-              * Matrix_Rotate_X(0.2f)
-              * Matrix_Rotate_Y(g_AngleY + (float)glfwGetTime() * 0.1f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, SPHERE);
-        DrawVirtualObject("sphere");
-
-        // Desenhamos o modelo do coelho
-        model = Matrix_Translate(1.0f,0.0f,0.0f)
-              * Matrix_Rotate_X(g_AngleX + (float)glfwGetTime() * 0.1f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, BUNNY);
-        DrawVirtualObject("bunny");
+        #define LAMPPOST 0
+        #define CAR 1
 
         // Desenhamos o carro
         glm::mat4 car_model = Matrix_Translate(car_position.x,car_position.y,car_position.z)
@@ -443,11 +420,15 @@ int main(int argc, char* argv[])
         glUniform1i(object_id_uniform, CAR);
         DrawVirtualObject("lincoln_navigator");
 
-        // Desenhamos o plano do chão
-        model = Matrix_Translate(0.0f,-1.1f,0.0f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, PLANE);
-        DrawVirtualObject("plane");
+         glm::mat4 lamp_model = Matrix_Translate( 20.0f,0.0f,00.0f)
+         * Matrix_Rotate_Z(0.0f)
+         * Matrix_Rotate_Y(0.0f)
+         * Matrix_Rotate_X(0.0f);
+        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(lamp_model));
+        glUniform1i(object_id_uniform, LAMPPOST);
+        DrawVirtualObject("Lp_2");
+
+
 
         // Pegamos um vértice com coordenadas de modelo (0.5, 0.5, 0.5, 1) e o
         // passamos por todos os sistemas de coordenadas armazenados nas
@@ -795,7 +776,7 @@ void BuildTrianglesAndAddToVirtualScene(ObjModel* model)
         theobject.bbox_max = bbox_max;
 
         g_VirtualScene[model->shapes[shape].name] = theobject;
-        std::cout << model->shapes[shape].name << std::endl;
+        std::cout << model->shapes[shape].name  << std::endl;
     }
 
     GLuint VBO_model_coefficients_id;

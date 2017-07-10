@@ -19,10 +19,8 @@ uniform mat4 view;
 uniform mat4 projection;
 
 // Identificador que define qual objeto está sendo desenhado no momento
-#define SPHERE 0
-#define BUNNY  1
-#define PLANE  2
-#define CAR 3
+#define CAR 1
+#define LAMPPOST 0
 uniform int object_id;
 
 // Parâmetros da axis-aligned bounding box (AABB) do modelo
@@ -55,6 +53,11 @@ void main()
     // vértice.
     vec4 p = position_world;
 
+
+    vec4 lp = vec4(20.0f, 22.0f, 0.0f,1.0f);
+
+    lp = normalize((lp - p));
+
     // Normal do fragmento atual, interpolada pelo rasterizador a partir das
     // normais de cada vértice.
     vec4 n = normalize(normal);
@@ -65,10 +68,14 @@ void main()
     // Vetor que define o sentido da câmera em relação ao ponto atual.
     vec4 v = normalize(camera_position - p);
 
+        // Vetor que define o sentido da reflexão especular ideal.
+    vec4 r = -lp + 2*n*(dot(n,lp)); // PREENCHA AQUI o vetor de reflexão especular ideal
+
+
     // Coordenadas de textura U e V
     float U = 0.0;
     float V = 0.0;
-
+    vec3 Kd0 = texture(TextureImage0, vec2(U,V)).rgb;
     if (object_id == CAR){
 
         float minx = bbox_min.x;
@@ -85,15 +92,39 @@ void main()
         // do documento "Aula_20_e_21_Mapeamento_de_Texturas.pdf".
         U = (position_model.x - minx)/(maxx-minx);
         V = (position_model.y - miny)/(maxy-miny);
+        Kd0 = texture(TextureImage0, vec2(U,V)).rgb;
+    }
+    if (object_id == LAMPPOST){
+
+        float minx = bbox_min.x;
+        float maxx = bbox_max.x;
+
+        float miny = bbox_min.y;
+        float maxy = bbox_max.y;
+
+        float minz = bbox_min.z;
+        float maxz = bbox_max.z;
+
+        // Utilize as variáveis min*/max* definidas acima para normalizar as
+        // coordenadas de textura U e V dentro do intervalo [0,1]. Veja 149
+        // do documento "Aula_20_e_21_Mapeamento_de_Texturas.pdf".
+        U = (position_model.x - minx)/(maxx-minx);
+        V = (position_model.y - miny)/(maxy-miny);
+        if (position_model.y <  17.9f)
+            Kd0 = texture(TextureImage1, vec2(U,V)).rgb;
+        else Kd0 = texture(TextureImage2, vec2(U,V)).rgb;
     }
 
     // Obtemos a refletância difusa a partir da leitura da imagem TextureImage0
-    vec3 Kd0 = texture(TextureImage0, vec2(U,V)).rgb;
-    vec3 Kd1 = texture(TextureImage1, vec2(U,V)).rgb;
+
     // Equação de Iluminação
     float lambert = max(0,dot(n,l));
 
-    color = Kd0 * (lambert + 0.01);
+    float lambert_from_post = max(0,dot(n, lp));
+    float phong_specular_term  = pow(max(dot(r,v),0),1);
+
+
+    color = Kd0 * (0.01 + (lambert * 0.2 + ((lambert_from_post + phong_specular_term))));
 
     // Cor final com correção gamma, considerando monitor sRGB.
     // Veja https://en.wikipedia.org/w/index.php?title=Gamma_correction&oldid=751281772#Windows.2C_Mac.2C_sRGB_and_TV.2Fvideo_standard_gammas
