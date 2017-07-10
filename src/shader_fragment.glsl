@@ -54,7 +54,7 @@ void main()
     vec4 p = position_world;
 
 
-    vec4 lp = vec4(20.0f, 22.0f, 0.0f,1.0f);
+    vec4 lp = vec4(20.0f, 20.0f, 0.0f,1.0f);
 
     lp = normalize((lp - p));
 
